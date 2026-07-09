@@ -1,60 +1,86 @@
+import ctypes
 import os
 import shutil
+from typing import Tuple
 
-def executar_limpeza():
-    # Caminhos das pastas de arquivos temporários do Windows
-    pastas_temp = [
-        os.environ.get('TEMP'),                 # Geralmente C:\Users\Nome\AppData\Local\Temp
-        os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'Temp') # C:\Windows\Temp
-    ]
-    
-    bytes_liberados = 0
-    arquivos_deletados = 0
-    arquivos_falhados = 0
 
-    for pasta in pastas_temp:
-        if not pasta or not os.path.exists(pasta):
-            continue
-            
-        # Varre todos os arquivos e subpastas dentro da pasta temporária
-        for item in os.listdir(pasta):
-            caminho_item = os.path.join(pasta, item)
-            try:
-                # Calcula o tamanho do arquivo antes de deletar para o relatório
-                if os.path.isfile(caminho_item) or os.path.islink(caminho_item):
-                    bytes_liberados += os.path.getsize(caminho_item)
-                    os.unlink(caminho_item) # Deleta o arquivo
-                    arquivos_deletados += 1
-                elif os.path.isdir(caminho_item):
-                    # Para pastas, calcula o tamanho de forma recursiva
-                    for root, dirs, files in os.walk(caminho_item):
-                        bytes_liberados += sum(os.path.getsize(os.path.join(root, f)) for f in files)
-                    shutil.rmtree(caminho_item) # Deleta a pasta inteira e o que tem dentro
-                    arquivos_deletados += 1
-            except Exception:
-                # Se o arquivo estiver em uso pelo sistema/processo aberto, ele apenas pula
-                arquivos_falhados += 1
-
-    # Converte os bytes totais liberados para Megabytes (MB)
-    mb_liberados = round(bytes_liberados / (1024 ** 2), 1)
-    
-    return {
-        "mb_liberados": mb_liberados,
-        "deletados": arquivos_deletados,
-        "bloqueados": arquivos_falhados
-    }
-import ctypes
-
-def esvaziar_lixeira():
+def _remover_item(path: str) -> int:
+    """
+    Remove arquivo/pasta e retorna bytes liberados.
+    Ignora itens bloqueados/permissão negada.
+    """
+    total = 0
     try:
-        # Chama a função nativa do Windows (SHELL32) para limpar a lixeira silenciosamente
-        # O número 7 diz para o Windows não mostrar confirmação, nem som, nem barra de progresso
-        resultado = ctypes.windll.shell32.SHEmptyRecycleBinW(None, None, 7)
-        
-        # Se o resultado for 0, deu certo. Se der erro, pode ser porque a lixeira já estava vazia
+        if os.path.isfile(path) or os.path.islink(path):
+            total = os.path.getsize(path)
+            os.remove(path)
+        elif os.path.isdir(path):
+            # Soma tamanho antes de remover
+            for root, _, files in os.walk(path, topdown=False):
+                for f in files:
+                    fp = os.path.join(root, f)
+                    try:
+                        total += os.path.getsize(fp)
+                    except Exception:
+                        pass
+            shutil.rmtree(path, ignore_errors=False)
+    except Exception:
+        # Ignora arquivos em uso / sem permissão
+        return 0
+    return total
+
+
+def limpar_arquivos_temporarios() -> float:
+    """
+    Limpa %TEMP% e C:\\Windows\\Temp.
+    Retorna total liberado em MB.
+    """
+    caminhos = [
+        os.getenv("TEMP", ""),
+        os.getenv("TMP", ""),
+        r"C:\Windows\Temp",
+    ]
+
+    vistos = set()
+    total_bytes = 0
+
+    for pasta in caminhos:
+        if not pasta:
+            continue
+        pasta = os.path.abspath(pasta)
+        if pasta in vistos:
+            continue
+        vistos.add(pasta)
+
+        if not os.path.exists(pasta):
+            continue
+
+        try:
+            for nome in os.listdir(pasta):
+                alvo = os.path.join(pasta, nome)
+                total_bytes += _remover_item(alvo)
+        except Exception:
+            # Se não conseguir listar a pasta, segue fluxo
+            continue
+
+    total_mb = total_bytes / (1024 * 1024)
+    return round(total_mb, 2)
+
+
+def esvaziar_lixeira() -> Tuple[bool, str]:
+    """
+    Esvazia a lixeira do Windows em modo silencioso.
+    """
+    try:
+        SHERB_NOCONFIRMATION = 0x00000001
+        SHERB_NOPROGRESSUI = 0x00000002
+        SHERB_NOSOUND = 0x00000004
+
+        flags = SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND
+
+        resultado = ctypes.windll.shell32.SHEmptyRecycleBinW(None, None, flags)
         if resultado == 0:
-            return "Lixeira esvaziada com sucesso!"
-        else:
-            return "Lixeira já estava vazia ou nenhum item foi removido."
+            return True, "Lixeira esvaziada com sucesso."
+        return False, f"Falha ao esvaziar lixeira. Código: {resultado}"
     except Exception as e:
-        return f"Não foi possível limpar a lixeira: {str(e)}"
+        return False, f"Erro ao esvaziar lixeira: {e}"
