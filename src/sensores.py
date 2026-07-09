@@ -2,11 +2,20 @@ import os
 import platform
 import subprocess
 import psutil
+import threading
+import time
 
-def obter_dados_gpu_universal():
+dados_gpu_tempo_real = {"uso": "Ativa"}
+# 🔥 Interruptor para ligar/desligar o sensor da GPU
+monitorar_gpu = True
+
+def coletar_dados_estaticos():
+    nome_pc = os.environ.get('COMPUTERNAME') or platform.node()
+    usuario = os.environ.get('USERNAME')
+    modelo_cpu = platform.processor()
+    
     modelo_gpu = "Não detectada"
     vram_gpu = "N/A"
-    uso_gpu = "N/A"
     try:
         comando_wmi = "powershell -ExecutionPolicy Bypass -Command \"Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM | ConvertTo-Csv -NoTypeInformation\""
         resultado_wmi = subprocess.check_output(comando_wmi, shell=True, text=True).strip().split('\n')
@@ -20,25 +29,38 @@ def obter_dados_gpu_universal():
                 vram_gpu = "Dinâmica"
     except Exception:
         pass
+        
+    return {
+        "nome_pc": nome_pc,
+        "usuario": usuario,
+        "modelo_cpu": modelo_cpu,
+        "modelo_gpu": modelo_gpu,
+        "vram_gpu": vram_gpu
+    }
 
+def _worker_gpu(modelo_gpu):
+    global monitorar_gpu
     if "nvidia" in modelo_gpu.lower():
-        try:
-            comando_nvidia = 'nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits'
-            uso_nvidia = subprocess.check_output(comando_nvidia, shell=True, text=True).strip()
-            uso_gpu = f"{uso_nvidia}%"
-        except Exception:
-            uso_gpu = "0%"
-    else:
-        uso_gpu = "Ativa"
+        while True:
+            # Só gasta processamento se o interruptor estiver ligado
+            if monitorar_gpu:
+                try:
+                    comando = 'nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits'
+                    uso = subprocess.check_output(comando, shell=True, text=True).strip()
+                    dados_gpu_tempo_real["uso"] = f"{uso}%"
+                except Exception:
+                    dados_gpu_tempo_real["uso"] = "0%"
+            else:
+                dados_gpu_tempo_real["uso"] = "Pausada (Economia)"
+            
+            time.sleep(1)
 
-    return modelo_gpu, vram_gpu, uso_gpu
+def iniciar_monitoramento_gpu(modelo_gpu):
+    thread = threading.Thread(target=_worker_gpu, args=(modelo_gpu,), daemon=True)
+    thread.start()
 
-def coletar_hardware():
-    nome_pc = os.environ.get('COMPUTERNAME') or platform.node()
-    usuario = os.environ.get('USERNAME')
+def coletar_hardware_dinamico():
     uso_cpu = psutil.cpu_percent()
-    modelo_gpu, vram_gpu, uso_gpu = obter_dados_gpu_universal()
-    
     memoria = psutil.virtual_memory()
     ram_total = round(memoria.total / (1024**3), 1)
     ram_uso = memoria.percent
@@ -48,14 +70,10 @@ def coletar_hardware():
     disco_livre = round(disco.free / (1024**3), 1)
     
     return {
-        "nome_pc": nome_pc,
-        "usuario": usuario,
         "uso_cpu": uso_cpu,
-        "modelo_gpu": modelo_gpu,
-        "vram_gpu": vram_gpu,
-        "uso_gpu": uso_gpu,
         "ram_total": ram_total,
         "ram_uso": ram_uso,
         "disco_total": disco_total,
-        "disco_livre": disco_livre
+        "disco_livre": disco_livre,
+        "uso_gpu": dados_gpu_tempo_real["uso"]
     }
