@@ -1,0 +1,14 @@
+Documentação do Projeto: Fundamentos de Python (Variáveis e Entrada/Saída)Nesta seção, registro os fundamentos da linguagem Python utilizados para capturar e exibir os dados de hardware e sistema no Toolbox Pro.🧠 Conceitos Fundamentais1. O que é o print()?O print() é uma função de Saída (Output). Ele serve exclusivamente para exibir informações, textos ou resultados de comandos dentro do terminal (a tela preta). Ele não cria janelas ou interfaces visuais; apenas "gospe" no console o que estiver dentro dos seus parênteses.2. O que é uma Variável?Uma variável é um espaço alocado na memória RAM do computador para armazenar temporariamente um dado que o programa vai usar mais tarde.Pense na memória RAM como uma grande estante cheia de caixas.A Variável é o nome (a etiqueta) que colamos na caixa.O Valor é o conteúdo que guardamos dentro dela.No Python, usamos o sinal de = (operador de atribuição) para colocar o valor dentro da caixa.Python# Criando a caixa "nome_tecnico" e guardando o texto "Matheus" lá dentro
+nome_tecnico = "Matheus"
+🛠️ Aplicação Prática no Toolbox ProNo script inicial do main.py, usamos a biblioteca nativa os para interagir com o Windows e capturar dados dinâmicos do sistema operacional através de variáveis de ambiente.O Código Explicado:Pythonimport os
+
+# Captura o nome de rede do computador e guarda na variável 'nome_sistema'
+nome_sistema = os.environ.get('COMPUTERNAME')
+
+# Captura o usuário atualmente logado no Windows e guarda na variável 'usuario_atual'
+usuario_atual = os.environ.get('USERNAME')
+
+# Exibe os dados capturados combinando texto fixo com o conteúdo das variáveis
+print("Nome do Computador:", nome_sistema)
+print("Usuário Logado:    ", usuario_atual)
+📋 Tipos de Dados Básicos (Para guardar na mente)O Python identifica automaticamente o tipo de dado que vai dentro da variável. Os 4 principais que usaremos no projeto são:TipoNome em PythonO que armazenaExemplo no ProjetoTextostr (String)Qualquer texto entre aspas"Matheus", "DESKTOP-Nitro5"Inteiroint (Integer)Números inteiros (sem vírgula)12 (GB de RAM), 11 (Geração do i5)DecimalfloatNúmeros com ponto flutuante1.88 (Altura), 3.14 (Versão do Python)BooleanoboolVerdadeiro (True) ou Falso (False)True (Se o script rodar como Admin)🐛 Erros Comuns de Iniciante1. Erro: NameError: name 'minha_variavel' is not definedPor que acontece: Você tentou usar uma variável usando print() antes de criar a variável, ou digitou o nome dela com alguma letra errada (Python diferencia maiúsculas de minúsculas).2. Erro: FileNotFoundError / No such file or directoryPor que acontece: Tentativa de rodar o comando python src/main.py quando o terminal já estava aberto dentro da pasta src.Como resolver: Entender onde o terminal está apontando (pwd ou olhando a linha verde). Se já estiver dentro de src, roda apenas python main.py.
